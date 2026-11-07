@@ -5,6 +5,21 @@ Mon app d'entraînement **streetlifting + powerlifting**, installable sur l'iPho
 **Ouvrir l'app :** https://arnold138.github.io/duo-fit/
 **Sur iPhone :** ouvrir le lien dans Safari → Partager → **Sur l'écran d'accueil**.
 
+## Nouveautés de la version 1.2 — coach intelligent, récap du jour, stats de progression
+
+- **La séance du jour s'efface dès que tu as fait quelque chose aujourd'hui** (séance proposée, séance libre ou course) et laisse place au **récap**. La séance proposée revient le lendemain. Un bouton permet de la réafficher.
+- **Récap du jour :** gros chiffre (e1RM du jour), **comparaison avec la dernière fois** (▲ ▼), badge **Record**, et **une barre par série** dont la couleur suit le RPE. En dessous : la **prochaine séance** et pourquoi cette charge.
+- **Coach :** une note de **forme sur 100**. Elle combine ton ressenti (avant et après séance), la **charge des 7 derniers jours comparée à ta moyenne sur 28 jours** (zone sûre 0,8 à 1,3), tes **top sets plus durs ou plus faciles que prévu**, et une **baisse de performance** (2 séances sous l'attendu).
+  - En forme / normal : séance prévue.
+  - Un peu entamé : **RPE −0,5 et une série de moins**.
+  - Récupération : **séance allégée automatique** (RPE 6,5, peu de séries).
+- **Douleurs par zone** (dos, épaules, coudes, poignets, genoux, hanches) : 1-3 → −10 % ; 4-6 → **−40 % et tempo lent** ; 7-10 → **exercice en pause**. On remonte d'un cran à chaque séance sans douleur et chaque semaine. À signaler avant la séance ou dans le ressenti.
+- **« Pourquoi cette séance ? »** liste toutes les raisons des ajustements.
+- **Stats :** courbe de force par mouvement (base, séances, objectif du cycle en pointillé), forme et fatigue, records (e1RM, plus lourd, tonnage), régularité sur 12 semaines, volume hebdo **par mouvement**.
+- Corrections : étiquette « Échauffement » qui débordait, carte Course vide dans Profil, dips/tractions comptés aussi pour les bras (à moitié), nombres coupés dans les notifications.
+
+**Sécurité :** format `duofit:v1` inchangé. Nouveaux champs optionnels (`pain` sur une séance, entrée `kind: "pain"`). Le coach recalcule tout à partir du journal.
+
 ## Nouveautés de la version 1.1 — deux profils, corbeille, course
 
 - **« Qui s'entraîne ? » au premier lancement :** **Arnold** (profil déjà chargé avec tout l'historique) ou **Nouveau profil**.
