@@ -12,3 +12,4 @@ drop policy if exists "duofit_update_own" on public.duofit_state;
 create policy "duofit_select_own" on public.duofit_state for select using ((select auth.uid()) = user_id);
 create policy "duofit_insert_own" on public.duofit_state for insert with check ((select auth.uid()) = user_id);
 create policy "duofit_update_own" on public.duofit_state for update using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
+
