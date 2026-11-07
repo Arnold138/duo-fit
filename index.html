@@ -316,8 +316,6 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(-
         </div>
         <div class="section-h"><h2>Synchronisation</h2><span id="sync-badge"></span></div>
         <div class="card" id="sync-card"></div>
-        <div class="section-h"><h2>Strava</h2></div>
-        <div class="card" id="strava-card"></div>
         <div class="section-h"><h2>Sauvegarde</h2></div>
         <div class="card" style="display:flex;flex-direction:column;gap:10px">
           <div class="muted" style="font-size:14px;line-height:1.45">Un fichier avec tout ton journal. À garder avant une grosse mise à jour.</div>
@@ -539,7 +537,6 @@ async function syncNow(){ const c=client(); if(!c||syncing) return;
   syncing=true; SYNC.status="syncing"; SYNC.email=u.email||""; renderSync();
   try{ const {data,error}=await c.from("duofit_state").select("data").eq("user_id",u.id).maybeSingle(); if(error) throw error;
     if(data&&data.data){ D=mergeStates(D,sanitize(data.data)); try{ localStorage.setItem(LS,JSON.stringify(D)); }catch(e){} rebuild(); renderAll(); }
-    try{ if(await pullStrava(c,u)){ try{ localStorage.setItem(LS,JSON.stringify(D)); }catch(e){} rebuild(); renderAll(); } }catch(e){}
     const {error:e2}=await c.from("duofit_state").upsert({user_id:u.id,data:D,updated_at:new Date().toISOString()}); if(e2) throw e2;
     SYNC.status="ok"; SYNC.last=Date.now(); SYNC.msg="";
   }catch(e){ SYNC.status="error"; SYNC.msg=e.message||String(e); }
@@ -614,7 +611,7 @@ function renderJournal(){
   const runs=weekSessions().filter(x=>x.type==="run"), km=weekKm(), showRun=runs.length||(kind()==="custom"&&D.profile.run!==false);
   $("j-run-wrap").hidden=!showRun;
   if(showRun) $("j-run").innerHTML=`<div class="grid2"><div><span class="big num">${fmt1(km)}</span><span class="unit">km</span></div><div><span class="big num">${runs.length?paceStr(runs.reduce((a,x)=>a+x.run.sec,0),km):"–"}</span><span class="unit">/km</span></div></div>
-    <div class="muted num" style="font-size:13px;margin-top:4px">${runs.length} sortie${runs.length>1?"s":""} · ajoute une course avec + ou relie Strava dans Profil</div>`;
+    <div class="muted num" style="font-size:13px;margin-top:4px">${runs.length} sortie${runs.length>1?"s":""} · ajoute une course avec le bouton +</div>`;
   $("j-recent").innerHTML=S.sessions.filter(s=>s.day<S.today).slice().reverse().map(sessionRow).join("");
 }
 
@@ -1007,32 +1004,6 @@ async function doAuth(up,email,pass){ const c=client(); if(!c) return "Pas de co
     if(error) return error.message==="Invalid login credentials"?"E-mail ou mot de passe incorrect.":error.message; }
   await syncNow(); return ""; }
 
-/* ===== Strava ===== */
-const FN=SB_URL+"/functions/v1/strava";
-const STRAVA={linked:null,name:"",busy:false,msg:""};
-async function authHeaders(){ const c=client(); if(!c) return null; const {data}=await c.auth.getSession(); return data.session?{Authorization:"Bearer "+data.session.access_token,apikey:SB_KEY}:null; }
-async function stravaStatus(){ const h=await authHeaders(); if(!h){ STRAVA.linked=null; renderStrava(); return; }
-  try{ const r=await fetch(FN+"/status",{headers:h}); const j=await r.json(); STRAVA.linked=!!j.linked; STRAVA.name=j.name||""; }catch(e){ STRAVA.linked=null; }
-  renderStrava(); }
-function renderStrava(){ const c=$("strava-card"); if(!c) return;
-  if(SYNC.status==="off"){ c.innerHTML=`<div class="muted" style="font-size:14px;line-height:1.45">Connecte-toi d'abord (Synchronisation, juste au-dessus) pour relier Strava.</div>`; return; }
-  if(STRAVA.linked){ c.innerHTML=`<div class="row"><div class="grow"><div class="t">Relié${STRAVA.name?" · "+esc(STRAVA.name):""}</div><div class="s">Tes courses Strava arrivent toutes seules dans le journal.</div></div><button class="pill-btn" type="button" id="strava-off">Délier</button></div>`; return; }
-  c.innerHTML=`<div class="muted" style="font-size:14px;line-height:1.45;margin-bottom:10px">Chaque course enregistrée sur Strava (montre, iPhone) arrive dans ton journal avec les km et l'allure.</div>
-    <button class="btn-primary" type="button" id="strava-on" style="background:#FC4C02;color:#fff" ${STRAVA.busy?"disabled":""}>Relier Strava</button>
-    <div class="note" style="color:var(--warn);padding-top:6px">${esc(STRAVA.msg)}</div>`; }
-document.addEventListener("click",async ev=>{ const b=ev.target.closest("button"); if(!b) return;
-  if(b.id==="strava-on"){ const h=await authHeaders(); if(!h) return; STRAVA.busy=true; STRAVA.msg=""; renderStrava();
-    try{ const r=await fetch(FN+"/start",{method:"POST",headers:h}); const j=await r.json(); if(!j.url) throw new Error(j.error||"Strava indisponible"); location.href=j.url; }
-    catch(e){ STRAVA.busy=false; STRAVA.msg="Impossible de joindre Strava : "+e.message; renderStrava(); } }
-  if(b.id==="strava-off"){ const h=await authHeaders(); if(!h) return; await fetch(FN+"/unlink",{method:"POST",headers:h}).catch(()=>{}); STRAVA.linked=false; renderStrava(); toast("Strava délié"); } });
-/* Récupère les courses reçues de Strava et les ajoute au journal (une seule fois par activité). */
-async function pullStrava(c,u){
-  const since=isoDay(new Date(Date.now()-200*DAY));
-  const {data,error}=await c.from("strava_activities").select("activity_id,data").eq("user_id",u.id).gte("data->>date",since);
-  if(error||!data) return false; let added=0;
-  data.forEach(r=>{ const id="strava-"+r.activity_id, a=r.data||{}; if(D.log.some(e=>e.id===id)||!a.date||!(a.km>0)) return;
-    D.log.push({id,t:Date.now(),date:a.date,kind:"run",src:"strava",title:a.name||"Course Strava",run:{km:Math.round(a.km*100)/100,sec:a.sec||0,elev:a.elev||0,rpe:null}}); added++; });
-  return added>0; }
 
 function renderAll(){ renderPlan(); renderJournal(); renderStats(); renderDuo(); renderProfil(); }
 
@@ -1144,7 +1115,7 @@ function success(){ try{ navigator.vibrate&&navigator.vibrate([12,40,12]); }catc
 function fit(){ const d=$("device"); if(innerWidth<=520){ d.style.transform=""; return; } const k=Math.min(1,(innerHeight-48)/852); d.style.transform=k<1?`scale(${k})`:""; }
 addEventListener("resize",fit); fit();
 /* ===== Synchro : écran ===== */
-function renderSync(){ renderStrava(); const c=$("sync-card"); if(!c) return;
+function renderSync(){ const c=$("sync-card"); if(!c) return;
   const lab={off:"Hors ligne",syncing:"Synchro…",ok:"Synchronisé",error:"Erreur"}[SYNC.status];
   $("sync-badge").textContent=lab;
   if(SYNC.status==="off"){ c.innerHTML=`<div class="muted" style="font-size:14px;line-height:1.45;margin-bottom:10px">Connecte-toi pour retrouver tes séances sur iPhone et sur PC. Arnold : <b style="color:var(--fg)">le même compte que Kioku</b>. Sinon, crée ton compte.</div>
@@ -1157,13 +1128,13 @@ function renderSync(){ renderStrava(); const c=$("sync-card"); if(!c) return;
   c.innerHTML=`<div class="row"><div class="grow"><div class="t">${SYNC.email}</div><div class="s">${SYNC.status==="error"?"Erreur : "+SYNC.msg:"Dernière synchro : "+when}</div></div><button class="pill-btn" type="button" id="sync-now">Synchroniser</button></div>
     <div class="row"><div class="grow s">Déconnecter cet appareil (tes données restent ici)</div><button class="pill-btn" type="button" id="sync-out">Déconnexion</button></div>`; }
 document.addEventListener("submit",async ev=>{ if(ev.target.id!=="sync-form") return; ev.preventDefault();
-  SYNC.msg=await doAuth(false,$("sync-email").value.trim(),$("sync-pass").value); renderSync(); if(!SYNC.msg){ toast("Connecté, séances synchronisées"); stravaStatus(); } });
+  SYNC.msg=await doAuth(false,$("sync-email").value.trim(),$("sync-pass").value); renderSync(); if(!SYNC.msg) toast("Connecté, séances synchronisées"); });
 document.addEventListener("click",async ev=>{ const b=ev.target.closest("button"); if(!b) return;
   if(b.id==="sync-up"){ SYNC.msg=await doAuth(true,$("sync-email").value.trim(),$("sync-pass").value); renderSync(); if(!SYNC.msg) toast("Compte créé et connecté"); }
   if(b.id==="p-edit") openSetup();
   if(b.id==="p-switch") showWelcome();
   if(b.id==="sync-now") syncNow();
-  if(b.id==="sync-out"){ const c=client(); if(c) await c.auth.signOut(); SYNC.status="off"; renderSync(); renderStrava(); }
+  if(b.id==="sync-out"){ const c=client(); if(c) await c.auth.signOut(); SYNC.status="off"; renderSync(); }
   if(b.id==="bk-export"){ const blob=new Blob([JSON.stringify(D,null,1)],{type:"application/json"}); const a=document.createElement("a");
     a.href=URL.createObjectURL(blob); a.download=`duofit-sauvegarde-${isoDay(new Date())}.json`; document.body.appendChild(a); a.click(); a.remove(); toast("Sauvegarde exportée"); } });
 $("bk-import").addEventListener("change",async ev=>{ const f=ev.target.files[0]; if(!f) return;
@@ -1172,8 +1143,7 @@ $("bk-import").addEventListener("change",async ev=>{ const f=ev.target.files[0];
 
 rebuild(); renderAll(); renderMuscu(); renderSync(); showTab(location.hash.slice(1));
 if(!kind()) showWelcome();
-{ const q=new URLSearchParams(location.search).get("strava"); if(q){ history.replaceState(null,"",location.pathname+location.hash); setTimeout(()=>toast(q==="ok"?"Strava relié, tes courses vont arriver":"Strava n'a pas été relié"),600); } }
-(async()=>{ const c=client(); if(!c) return; const {data}=await c.auth.getSession(); if(data.session){ SYNC.status="syncing"; await syncNow(); stravaStatus(); } })();
+(async()=>{ const c=client(); if(!c) return; const {data}=await c.auth.getSession(); if(data.session){ SYNC.status="syncing"; await syncNow(); } })();
 if("serviceWorker" in navigator) addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
 </script>
 
